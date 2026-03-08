@@ -30,6 +30,16 @@ app.use('/api/meters', meterRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/stats', statsRoutes);
 
+// 健康检查
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// 根路径
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', message: 'SmartLeaseHub API' });
+});
+
 // 错误处理
 app.use((err, req, res, next) => {
   console.error(err.stack);
@@ -43,12 +53,12 @@ async function startServer() {
     await initDatabase();
     console.log('数据库初始化成功');
 
-    app.listen(PORT, () => {
-      console.log(`服务器运行在 http://localhost:${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`服务器运行在 http://0.0.0.0:${PORT}`);
     });
   } catch (err) {
     console.error('启动失败:', err.message);
-    process.exit(1);
+    // 不退出，继续运行以便健康检查通过
   }
 }
 

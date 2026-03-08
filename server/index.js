@@ -52,14 +52,14 @@ async function startServer() {
     // 初始化数据库表
     await initDatabase();
     console.log('数据库初始化成功');
-
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`服务器运行在 http://0.0.0.0:${PORT}`);
-    });
   } catch (err) {
-    console.error('启动失败:', err.message);
-    // 不退出，继续运行以便健康检查通过
+    console.error('数据库初始化失败:', err.message);
+    console.log('继续启动服务器...');
   }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`服务器运行在 http://0.0.0.0:${PORT}`);
+  });
 }
 
 startServer();

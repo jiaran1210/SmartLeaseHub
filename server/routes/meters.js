@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // 获取水电煤读数列表
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { house_id, type } = req.query;
 
@@ -33,7 +33,7 @@ router.get('/', (req, res) => {
 
     query += ' ORDER BY m.reading_date DESC, m.type ASC';
 
-    const readings = db.prepare(query).all(...params);
+    const readings = await db.prepare(query).all(...params);
 
     res.json({ readings });
   } catch (err) {
@@ -43,19 +43,19 @@ router.get('/', (req, res) => {
 });
 
 // 获取某房屋某类型最新读数
-router.get('/latest/:house_id/:type', (req, res) => {
+router.get('/latest/:house_id/:type', async (req, res) => {
   try {
     const { house_id, type } = req.params;
 
     // 验证房屋属于当前用户
-    const house = db.prepare('SELECT id FROM houses WHERE id = ? AND user_id = ?')
+    const house = await db.prepare('SELECT id FROM houses WHERE id = ? AND user_id = ?')
       .get(house_id, req.userId);
 
     if (!house) {
       return res.status(404).json({ error: '房屋不存在' });
     }
 
-    const reading = db.prepare(`
+    const reading = await db.prepare(`
       SELECT * FROM meter_readings
       WHERE house_id = ? AND type = ?
       ORDER BY reading_date DESC, created_at DESC
@@ -70,7 +70,7 @@ router.get('/latest/:house_id/:type', (req, res) => {
 });
 
 // 新增读数
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { house_id, type, reading, reading_date, cost } = req.body;
 
@@ -79,7 +79,7 @@ router.post('/', (req, res) => {
     }
 
     // 验证房屋属于当前用户
-    const house = db.prepare('SELECT id FROM houses WHERE id = ? AND user_id = ?')
+    const house = await db.prepare('SELECT id FROM houses WHERE id = ? AND user_id = ?')
       .get(house_id, req.userId);
 
     if (!house) {
@@ -88,7 +88,7 @@ router.post('/', (req, res) => {
 
     // 计算用量
     let usage = 0;
-    const lastReading = db.prepare(`
+    const lastReading = await db.prepare(`
       SELECT reading FROM meter_readings
       WHERE house_id = ? AND type = ?
       ORDER BY reading_date DESC, created_at DESC
@@ -101,12 +101,12 @@ router.post('/', (req, res) => {
 
     const readingId = uuidv4();
 
-    db.prepare(`
-      INSERT INTO meter_readings (id, house_id, type, reading, reading_date, usage, cost)
+    await db.prepare(`
+      INSERT INTO meter_readings (id, house_id, type, reading, reading_date, usage_amount, cost)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(readingId, house_id, type, reading, reading_date, usage > 0 ? usage : 0, cost || null);
 
-    const newReading = db.prepare('SELECT * FROM meter_readings WHERE id = ?').get(readingId);
+    const newReading = await db.prepare('SELECT * FROM meter_readings WHERE id = ?').get(readingId);
 
     res.json({ message: '添加成功', reading: newReading });
   } catch (err) {
@@ -116,10 +116,10 @@ router.post('/', (req, res) => {
 });
 
 // 删除读数
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     // 检查读数是否存在且房屋属于当前用户
-    const reading = db.prepare(`
+    const reading = await db.prepare(`
       SELECT m.* FROM meter_readings m
       LEFT JOIN houses h ON m.house_id = h.id
       WHERE m.id = ? AND h.user_id = ?
@@ -129,7 +129,7 @@ router.delete('/:id', (req, res) => {
       return res.status(404).json({ error: '读数记录不存在' });
     }
 
-    db.prepare('DELETE FROM meter_readings WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM meter_readings WHERE id = ?').run(req.params.id);
 
     res.json({ message: '删除成功' });
   } catch (err) {

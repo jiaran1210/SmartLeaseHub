@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // 获取房租缴纳记录
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { house_id, tenant_id, year } = req.query;
 
@@ -33,13 +33,13 @@ router.get('/', (req, res) => {
     }
 
     if (year) {
-      query += " AND strftime('%Y', rp.payment_date) = ?";
+      query += " AND DATE_FORMAT(rp.payment_date, '%Y') = ?";
       params.push(year);
     }
 
     query += ' ORDER BY rp.payment_date DESC';
 
-    const payments = db.prepare(query).all(...params);
+    const payments = await db.prepare(query).all(...params);
 
     res.json({ payments });
   } catch (err) {
@@ -49,7 +49,7 @@ router.get('/', (req, res) => {
 });
 
 // 新增房租缴纳
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { tenant_id, house_id, amount, payment_date, period_start, period_end, payment_method, remark } = req.body;
 
@@ -58,10 +58,10 @@ router.post('/', (req, res) => {
     }
 
     // 验证房屋和租户
-    const house = db.prepare('SELECT id FROM houses WHERE id = ? AND user_id = ?')
+    const house = await db.prepare('SELECT id FROM houses WHERE id = ? AND user_id = ?')
       .get(house_id, req.userId);
 
-    const tenant = db.prepare('SELECT id FROM tenants WHERE id = ?').get(tenant_id);
+    const tenant = await db.prepare('SELECT id FROM tenants WHERE id = ?').get(tenant_id);
 
     if (!house || !tenant) {
       return res.status(404).json({ error: '房屋或租户不存在' });
@@ -69,12 +69,12 @@ router.post('/', (req, res) => {
 
     const paymentId = uuidv4();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO rent_payments (id, tenant_id, house_id, amount, payment_date, period_start, period_end, payment_method, remark)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(paymentId, tenant_id, house_id, amount, payment_date, period_start, period_end, payment_method || '', remark || '');
 
-    const payment = db.prepare('SELECT * FROM rent_payments WHERE id = ?').get(paymentId);
+    const payment = await db.prepare('SELECT * FROM rent_payments WHERE id = ?').get(paymentId);
 
     res.json({ message: '添加成功', payment });
   } catch (err) {
@@ -84,10 +84,10 @@ router.post('/', (req, res) => {
 });
 
 // 删除房租缴纳记录
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     // 检查记录是否存在且房屋属于当前用户
-    const payment = db.prepare(`
+    const payment = await db.prepare(`
       SELECT rp.* FROM rent_payments rp
       LEFT JOIN houses h ON rp.house_id = h.id
       WHERE rp.id = ? AND h.user_id = ?
@@ -97,7 +97,7 @@ router.delete('/:id', (req, res) => {
       return res.status(404).json({ error: '缴纳记录不存在' });
     }
 
-    db.prepare('DELETE FROM rent_payments WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM rent_payments WHERE id = ?').run(req.params.id);
 
     res.json({ message: '删除成功' });
   } catch (err) {

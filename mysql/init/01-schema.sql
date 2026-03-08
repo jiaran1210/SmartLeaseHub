@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS meter_readings (
   type VARCHAR(10) NOT NULL,
   reading DECIMAL(10,2) NOT NULL,
   reading_date DATE NOT NULL,
-  usage DECIMAL(10,2),
+  usage_amount DECIMAL(10,2),
   cost DECIMAL(10,2),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_house_id (house_id),

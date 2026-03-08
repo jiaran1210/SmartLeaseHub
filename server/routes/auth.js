@@ -20,7 +20,7 @@ router.post('/register', async (req, res) => {
     }
 
     // 检查用户是否已存在
-    const existingUser = db.prepare('SELECT id FROM users WHERE phone = ?').get(phone);
+    const existingUser = await db.prepare('SELECT id FROM users WHERE phone = ?').get(phone);
     if (existingUser) {
       return res.status(400).json({ error: '该手机号已注册' });
     }
@@ -29,7 +29,7 @@ router.post('/register', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const userId = uuidv4();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO users (id, phone, password) VALUES (?, ?, ?)
     `).run(userId, phone, hashedPassword);
 
@@ -56,7 +56,7 @@ router.post('/login', async (req, res) => {
     }
 
     // 查找用户
-    const user = db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);
+    const user = await db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);
     if (!user) {
       return res.status(400).json({ error: '用户不存在' });
     }
@@ -81,9 +81,9 @@ router.post('/login', async (req, res) => {
 });
 
 // 获取当前用户信息
-router.get('/me', authMiddleware, (req, res) => {
+router.get('/me', authMiddleware, async (req, res) => {
   try {
-    const user = db.prepare('SELECT id, phone, created_at FROM users WHERE id = ?').get(req.userId);
+    const user = await db.prepare('SELECT id, phone, created_at FROM users WHERE id = ?').get(req.userId);
     if (!user) {
       return res.status(404).json({ error: '用户不存在' });
     }

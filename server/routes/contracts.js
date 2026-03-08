@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // 获取合同列表
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { house_id, tenant_id } = req.query;
 
@@ -34,7 +34,7 @@ router.get('/', (req, res) => {
 
     query += ' ORDER BY c.created_at DESC';
 
-    const contracts = db.prepare(query).all(...params);
+    const contracts = await db.prepare(query).all(...params);
 
     res.json({ contracts });
   } catch (err) {
@@ -44,9 +44,9 @@ router.get('/', (req, res) => {
 });
 
 // 获取单个合同详情
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const contract = db.prepare(`
+    const contract = await db.prepare(`
       SELECT c.*, h.name as house_name, h.address as house_address,
         t.name as tenant_name, t.phone as tenant_phone
       FROM contracts c
@@ -67,7 +67,7 @@ router.get('/:id', (req, res) => {
 });
 
 // 新增合同
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const {
       tenant_id, house_id, start_date, end_date, monthly_rent, deposit, contract_file
@@ -78,10 +78,10 @@ router.post('/', (req, res) => {
     }
 
     // 验证房屋和租户属于当前用户
-    const house = db.prepare('SELECT id FROM houses WHERE id = ? AND user_id = ?')
+    const house = await db.prepare('SELECT id FROM houses WHERE id = ? AND user_id = ?')
       .get(house_id, req.userId);
 
-    const tenant = db.prepare('SELECT id FROM tenants WHERE id = ?')
+    const tenant = await db.prepare('SELECT id FROM tenants WHERE id = ?')
       .get(tenant_id);
 
     if (!house || !tenant) {
@@ -93,12 +93,12 @@ router.post('/', (req, res) => {
 
     const contractId = uuidv4();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO contracts (id, tenant_id, house_id, contract_no, start_date, end_date, monthly_rent, deposit, contract_file)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(contractId, tenant_id, house_id, contract_no, start_date, end_date, monthly_rent, deposit || 0, contract_file || '');
 
-    const contract = db.prepare('SELECT * FROM contracts WHERE id = ?').get(contractId);
+    const contract = await db.prepare('SELECT * FROM contracts WHERE id = ?').get(contractId);
 
     res.json({ message: '添加成功', contract });
   } catch (err) {
@@ -108,12 +108,12 @@ router.post('/', (req, res) => {
 });
 
 // 更新合同
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { start_date, end_date, monthly_rent, deposit, contract_file, status } = req.body;
 
     // 检查合同是否存在且房屋属于当前用户
-    const contract = db.prepare(`
+    const contract = await db.prepare(`
       SELECT c.* FROM contracts c
       LEFT JOIN houses h ON c.house_id = h.id
       WHERE c.id = ? AND h.user_id = ?
@@ -123,7 +123,7 @@ router.put('/:id', (req, res) => {
       return res.status(404).json({ error: '合同不存在' });
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE contracts
       SET start_date = ?, end_date = ?, monthly_rent = ?, deposit = ?, contract_file = ?, status = ?,
         updated_at = CURRENT_TIMESTAMP
@@ -138,7 +138,7 @@ router.put('/:id', (req, res) => {
       req.params.id
     );
 
-    const updatedContract = db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id);
+    const updatedContract = await db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id);
 
     res.json({ message: '更新成功', contract: updatedContract });
   } catch (err) {
@@ -148,10 +148,10 @@ router.put('/:id', (req, res) => {
 });
 
 // 删除合同
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     // 检查合同是否存在且房屋属于当前用户
-    const contract = db.prepare(`
+    const contract = await db.prepare(`
       SELECT c.* FROM contracts c
       LEFT JOIN houses h ON c.house_id = h.id
       WHERE c.id = ? AND h.user_id = ?
@@ -161,7 +161,7 @@ router.delete('/:id', (req, res) => {
       return res.status(404).json({ error: '合同不存在' });
     }
 
-    db.prepare('DELETE FROM contracts WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM contracts WHERE id = ?').run(req.params.id);
 
     res.json({ message: '删除成功' });
   } catch (err) {
@@ -171,13 +171,13 @@ router.delete('/:id', (req, res) => {
 });
 
 // 获取即将到期的合同
-router.get('/expiring/soon', (req, res) => {
+router.get('/expiring/soon', async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 30;
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + days);
 
-    const contracts = db.prepare(`
+    const contracts = await db.prepare(`
       SELECT c.*, h.name as house_name, h.address as house_address,
         t.name as tenant_name, t.phone as tenant_phone
       FROM contracts c

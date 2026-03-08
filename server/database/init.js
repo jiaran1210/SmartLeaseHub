@@ -19,6 +19,26 @@ async function getPool() {
   return pool;
 }
 
+// 模拟 better-sqlite3 的 prepare API
+function prepare(sql) {
+  return {
+    get: async (...params) => {
+      const pool = await getPool();
+      const [rows] = await pool.execute(sql, params);
+      return rows[0] || null;
+    },
+    all: async (...params) => {
+      const pool = await getPool();
+      const [rows] = await pool.execute(sql, params);
+      return rows;
+    },
+    run: async (...params) => {
+      const pool = await getPool();
+      await pool.execute(sql, params);
+    }
+  };
+}
+
 // 初始化数据库表
 async function initDatabase() {
   const db = await getPool();
@@ -124,7 +144,7 @@ async function initDatabase() {
       type VARCHAR(10) NOT NULL,
       reading DECIMAL(10,2) NOT NULL,
       reading_date DATE NOT NULL,
-      usage DECIMAL(10,2),
+      usage_amount DECIMAL(10,2),
       cost DECIMAL(10,2),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_house_id (house_id),
@@ -163,5 +183,6 @@ function query(sql, params = []) {
 module.exports = {
   getPool,
   initDatabase,
-  query
+  query,
+  prepare
 };

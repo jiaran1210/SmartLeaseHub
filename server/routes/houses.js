@@ -9,9 +9,9 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // 获取房屋列表
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const houses = db.prepare(`
+    const houses = await db.prepare(`
       SELECT h.*,
         (SELECT COUNT(*) FROM tenants WHERE house_id = h.id AND status = 'active') as tenant_count,
         (SELECT COALESCE(SUM(rp.amount), 0) FROM rent_payments rp WHERE rp.house_id = h.id) as total_income
@@ -28,9 +28,9 @@ router.get('/', (req, res) => {
 });
 
 // 获取单个房屋详情
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const house = db.prepare(`
+    const house = await db.prepare(`
       SELECT h.*,
         (SELECT COUNT(*) FROM tenants WHERE house_id = h.id AND status = 'active') as tenant_count,
         (SELECT COALESCE(SUM(rp.amount), 0) FROM rent_payments rp WHERE rp.house_id = h.id) as total_income
@@ -50,7 +50,7 @@ router.get('/:id', (req, res) => {
 });
 
 // 新增房屋
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { name, address, rooms, area } = req.body;
 
@@ -60,12 +60,12 @@ router.post('/', (req, res) => {
 
     const houseId = uuidv4();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO houses (id, user_id, name, address, rooms, area)
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(houseId, req.userId, name, address || '', rooms || '', area || null);
 
-    const house = db.prepare('SELECT * FROM houses WHERE id = ?').get(houseId);
+    const house = await db.prepare('SELECT * FROM houses WHERE id = ?').get(houseId);
 
     res.json({ message: '添加成功', house });
   } catch (err) {
@@ -75,19 +75,19 @@ router.post('/', (req, res) => {
 });
 
 // 更新房屋
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { name, address, rooms, area, status } = req.body;
 
     // 检查房屋是否存在且属于当前用户
-    const house = db.prepare('SELECT * FROM houses WHERE id = ? AND user_id = ?')
+    const house = await db.prepare('SELECT * FROM houses WHERE id = ? AND user_id = ?')
       .get(req.params.id, req.userId);
 
     if (!house) {
       return res.status(404).json({ error: '房屋不存在' });
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE houses
       SET name = ?, address = ?, rooms = ?, area = ?, status = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
@@ -100,7 +100,7 @@ router.put('/:id', (req, res) => {
       req.params.id
     );
 
-    const updatedHouse = db.prepare('SELECT * FROM houses WHERE id = ?').get(req.params.id);
+    const updatedHouse = await db.prepare('SELECT * FROM houses WHERE id = ?').get(req.params.id);
 
     res.json({ message: '更新成功', house: updatedHouse });
   } catch (err) {
@@ -110,10 +110,10 @@ router.put('/:id', (req, res) => {
 });
 
 // 删除房屋
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     // 检查房屋是否存在且属于当前用户
-    const house = db.prepare('SELECT * FROM houses WHERE id = ? AND user_id = ?')
+    const house = await db.prepare('SELECT * FROM houses WHERE id = ? AND user_id = ?')
       .get(req.params.id, req.userId);
 
     if (!house) {
@@ -121,14 +121,14 @@ router.delete('/:id', (req, res) => {
     }
 
     // 检查是否有活跃租户
-    const activeTenants = db.prepare('SELECT COUNT(*) as count FROM tenants WHERE house_id = ? AND status = ?')
+    const activeTenants = await db.prepare('SELECT COUNT(*) as count FROM tenants WHERE house_id = ? AND status = ?')
       .get(req.params.id, 'active');
 
     if (activeTenants.count > 0) {
       return res.status(400).json({ error: '该房屋下还有活跃租户，无法删除' });
     }
 
-    db.prepare('DELETE FROM houses WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM houses WHERE id = ?').run(req.params.id);
 
     res.json({ message: '删除成功' });
   } catch (err) {

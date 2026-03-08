@@ -8,39 +8,39 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // 获取年度收入统计
-router.get('/yearly', (req, res) => {
+router.get('/yearly', async (req, res) => {
   try {
     const { year } = req.query;
     const targetYear = year || new Date().getFullYear().toString();
 
     // 按房屋统计年度收入
-    const houseStats = db.prepare(`
+    const houseStats = await db.prepare(`
       SELECT
         h.id,
         h.name as house_name,
         COALESCE(SUM(rp.amount), 0) as total_income
       FROM houses h
       LEFT JOIN rent_payments rp ON h.id = rp.house_id
-        AND strftime('%Y', rp.payment_date) = '` + targetYear + `'
+        AND DATE_FORMAT(rp.payment_date, '%Y') = '` + targetYear + `'
       WHERE h.user_id = ?
       GROUP BY h.id
       ORDER BY total_income DESC
     `).all(req.userId);
 
     // 月度收入趋势
-    const monthlyTrend = db.prepare(`
+    const monthlyTrend = await db.prepare(`
       SELECT
-        strftime('%m', rp.payment_date) as month,
+        DATE_FORMAT(rp.payment_date, '%m') as month,
         COALESCE(SUM(rp.amount), 0) as income
       FROM rent_payments rp
       LEFT JOIN houses h ON rp.house_id = h.id
-      WHERE h.user_id = ? AND strftime('%Y', rp.payment_date) = '` + targetYear + `'
+      WHERE h.user_id = ? AND DATE_FORMAT(rp.payment_date, '%Y') = '` + targetYear + `'
       GROUP BY month
       ORDER BY month
     `).all(req.userId);
 
     // 汇总信息
-    const summary = db.prepare(`
+    const summary = await db.prepare(`
       SELECT
         COUNT(DISTINCT h.id) as house_count,
         COUNT(DISTINCT CASE WHEN t.status = 'active' THEN t.id END) as active_tenant_count,
@@ -48,7 +48,7 @@ router.get('/yearly', (req, res) => {
       FROM houses h
       LEFT JOIN tenants t ON h.id = t.house_id AND t.status = 'active'
       LEFT JOIN rent_payments rp ON h.id = rp.house_id
-        AND strftime('%Y', rp.payment_date) = '` + targetYear + `'
+        AND DATE_FORMAT(rp.payment_date, '%Y') = '` + targetYear + `'
       WHERE h.user_id = ?
     `).get(req.userId);
 
@@ -65,9 +65,9 @@ router.get('/yearly', (req, res) => {
 });
 
 // 获取房屋汇总信息
-router.get('/houses/summary', (req, res) => {
+router.get('/houses/summary', async (req, res) => {
   try {
-    const houses = db.prepare(`
+    const houses = await db.prepare(`
       SELECT
         h.id,
         h.name as house_name,
@@ -90,14 +90,14 @@ router.get('/houses/summary', (req, res) => {
 });
 
 // 获取即将到期提醒
-router.get('/reminders', (req, res) => {
+router.get('/reminders', async (req, res) => {
   try {
     const days = parseInt(req.query.days) || 30;
     const futureDate = new Date();
     futureDate.setDate(futureDate.getDate() + days);
 
     // 合同即将到期
-    const expiringContracts = db.prepare(`
+    const expiringContracts = await db.prepare(`
       SELECT c.*, h.name as house_name, t.name as tenant_name, t.phone as tenant_phone
       FROM contracts c
       LEFT JOIN houses h ON c.house_id = h.id
@@ -107,7 +107,7 @@ router.get('/reminders', (req, res) => {
     `).all(req.userId, futureDate.toISOString().split('T')[0]);
 
     // 房租即将到期（基于最后缴纳记录）
-    const upcomingRent = db.prepare(`
+    const upcomingRent = await db.prepare(`
       SELECT DISTINCT
         t.id as tenant_id,
         t.name as tenant_name,
@@ -135,14 +135,14 @@ router.get('/reminders', (req, res) => {
 });
 
 // 获取费用统计
-router.get('/expenses', (req, res) => {
+router.get('/expenses', async (req, res) => {
   try {
     const { house_id, year, type } = req.query;
 
     let query = `
       SELECT
-        strftime('%Y', b.bill_date) as year,
-        strftime('%m', b.bill_date) as month,
+        DATE_FORMAT(b.bill_date, '%Y') as year,
+        DATE_FORMAT(b.bill_date, '%m') as month,
         b.type,
         COALESCE(SUM(b.amount), 0) as total_amount
       FROM bills b
@@ -157,7 +157,7 @@ router.get('/expenses', (req, res) => {
     }
 
     if (year) {
-      query += " AND strftime('%Y', b.bill_date) = '" + year + "'";
+      query += " AND DATE_FORMAT(b.bill_date, '%Y') = '" + year + "'";
     }
 
     if (type) {
@@ -167,7 +167,7 @@ router.get('/expenses', (req, res) => {
 
     query += ' GROUP BY year, month, type ORDER BY year DESC, month DESC';
 
-    const expenses = db.prepare(query).all(...params);
+    const expenses = await db.prepare(query).all(...params);
 
     res.json({ expenses });
   } catch (err) {

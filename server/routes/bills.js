@@ -9,7 +9,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 // 获取账单列表
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { house_id, tenant_id, type, status } = req.query;
 
@@ -44,7 +44,7 @@ router.get('/', (req, res) => {
 
     query += ' ORDER BY b.bill_date DESC';
 
-    const bills = db.prepare(query).all(...params);
+    const bills = await db.prepare(query).all(...params);
 
     res.json({ bills });
   } catch (err) {
@@ -54,9 +54,9 @@ router.get('/', (req, res) => {
 });
 
 // 获取单个账单详情
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const bill = db.prepare(`
+    const bill = await db.prepare(`
       SELECT b.*, h.name as house_name, h.address as house_address,
         t.name as tenant_name, t.phone as tenant_phone
       FROM bills b
@@ -77,7 +77,7 @@ router.get('/:id', (req, res) => {
 });
 
 // 新增账单
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
     const { house_id, tenant_id, type, amount, bill_date, remark } = req.body;
 
@@ -86,7 +86,7 @@ router.post('/', (req, res) => {
     }
 
     // 验证房屋属于当前用户
-    const house = db.prepare('SELECT id FROM houses WHERE id = ? AND user_id = ?')
+    const house = await db.prepare('SELECT id FROM houses WHERE id = ? AND user_id = ?')
       .get(house_id, req.userId);
 
     if (!house) {
@@ -95,12 +95,12 @@ router.post('/', (req, res) => {
 
     const billId = uuidv4();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO bills (id, house_id, tenant_id, type, amount, bill_date, remark)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(billId, house_id, tenant_id || null, type, amount, bill_date, remark || '');
 
-    const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(billId);
+    const bill = await db.prepare('SELECT * FROM bills WHERE id = ?').get(billId);
 
     res.json({ message: '添加成功', bill });
   } catch (err) {
@@ -110,12 +110,12 @@ router.post('/', (req, res) => {
 });
 
 // 更新账单
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const { type, amount, bill_date, status, paid_date, remark } = req.body;
 
     // 检查账单是否存在且房屋属于当前用户
-    const bill = db.prepare(`
+    const bill = await db.prepare(`
       SELECT b.* FROM bills b
       LEFT JOIN houses h ON b.house_id = h.id
       WHERE b.id = ? AND h.user_id = ?
@@ -125,7 +125,7 @@ router.put('/:id', (req, res) => {
       return res.status(404).json({ error: '账单不存在' });
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE bills
       SET type = ?, amount = ?, bill_date = ?, status = ?, paid_date = ?, remark = ?,
         updated_at = CURRENT_TIMESTAMP
@@ -140,7 +140,7 @@ router.put('/:id', (req, res) => {
       req.params.id
     );
 
-    const updatedBill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
+    const updatedBill = await db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
 
     res.json({ message: '更新成功', bill: updatedBill });
   } catch (err) {
@@ -150,12 +150,12 @@ router.put('/:id', (req, res) => {
 });
 
 // 标记账单为已缴纳
-router.post('/:id/pay', (req, res) => {
+router.post('/:id/pay', async (req, res) => {
   try {
     const paid_date = req.body.paid_date || new Date().toISOString().split('T')[0];
 
     // 检查账单是否存在且房屋属于当前用户
-    const bill = db.prepare(`
+    const bill = await db.prepare(`
       SELECT b.* FROM bills b
       LEFT JOIN houses h ON b.house_id = h.id
       WHERE b.id = ? AND h.user_id = ?
@@ -165,7 +165,7 @@ router.post('/:id/pay', (req, res) => {
       return res.status(404).json({ error: '账单不存在' });
     }
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE bills SET status = ?, paid_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
     `).run('已缴纳', paid_date, req.params.id);
 
@@ -177,10 +177,10 @@ router.post('/:id/pay', (req, res) => {
 });
 
 // 删除账单
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     // 检查账单是否存在且房屋属于当前用户
-    const bill = db.prepare(`
+    const bill = await db.prepare(`
       SELECT b.* FROM bills b
       LEFT JOIN houses h ON b.house_id = h.id
       WHERE b.id = ? AND h.user_id = ?
@@ -190,7 +190,7 @@ router.delete('/:id', (req, res) => {
       return res.status(404).json({ error: '账单不存在' });
     }
 
-    db.prepare('DELETE FROM bills WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM bills WHERE id = ?').run(req.params.id);
 
     res.json({ message: '删除成功' });
   } catch (err) {

@@ -18,27 +18,27 @@ router.get('/', async (req, res) => {
       FROM bills b
       LEFT JOIN houses h ON b.house_id = h.id
       LEFT JOIN tenants t ON b.tenant_id = t.id
-      WHERE h.user_id = ?
+      WHERE h.user_id = $1
     `;
     const params = [req.userId];
 
     if (house_id) {
-      query += ' AND b.house_id = ?';
+      query += ' AND b.house_id = $' + (params.length + 1);
       params.push(house_id);
     }
 
     if (tenant_id) {
-      query += ' AND b.tenant_id = ?';
+      query += ' AND b.tenant_id = $' + (params.length + 1);
       params.push(tenant_id);
     }
 
     if (type) {
-      query += ' AND b.type = ?';
+      query += ' AND b.type = $' + (params.length + 1);
       params.push(type);
     }
 
     if (status) {
-      query += ' AND b.status = ?';
+      query += ' AND b.status = $' + (params.length + 1);
       params.push(status);
     }
 
@@ -62,7 +62,7 @@ router.get('/:id', async (req, res) => {
       FROM bills b
       LEFT JOIN houses h ON b.house_id = h.id
       LEFT JOIN tenants t ON b.tenant_id = t.id
-      WHERE b.id = ? AND h.user_id = ?
+      WHERE b.id = $1 AND h.user_id = $2
     `).get(req.params.id, req.userId);
 
     if (!bill) {
@@ -86,7 +86,7 @@ router.post('/', async (req, res) => {
     }
 
     // 验证房屋属于当前用户
-    const house = await db.prepare('SELECT id FROM houses WHERE id = ? AND user_id = ?')
+    const house = await db.prepare('SELECT id FROM houses WHERE id = $1 AND user_id = $2')
       .get(house_id, req.userId);
 
     if (!house) {
@@ -97,10 +97,10 @@ router.post('/', async (req, res) => {
 
     await db.prepare(`
       INSERT INTO bills (id, house_id, tenant_id, type, amount, bill_date, remark)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
     `).run(billId, house_id, tenant_id || null, type, amount, bill_date, remark || '');
 
-    const bill = await db.prepare('SELECT * FROM bills WHERE id = ?').get(billId);
+    const bill = await db.prepare('SELECT * FROM bills WHERE id = $1').get(billId);
 
     res.json({ message: '添加成功', bill });
   } catch (err) {
@@ -118,7 +118,7 @@ router.put('/:id', async (req, res) => {
     const bill = await db.prepare(`
       SELECT b.* FROM bills b
       LEFT JOIN houses h ON b.house_id = h.id
-      WHERE b.id = ? AND h.user_id = ?
+      WHERE b.id = $1 AND h.user_id = $2
     `).get(req.params.id, req.userId);
 
     if (!bill) {
@@ -127,9 +127,9 @@ router.put('/:id', async (req, res) => {
 
     await db.prepare(`
       UPDATE bills
-      SET type = ?, amount = ?, bill_date = ?, status = ?, paid_date = ?, remark = ?,
+      SET type = $1, amount = $2, bill_date = $3, status = $4, paid_date = $5, remark = $6,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
+      WHERE id = $7
     `).run(
       type || bill.type,
       amount || bill.amount,
@@ -140,7 +140,7 @@ router.put('/:id', async (req, res) => {
       req.params.id
     );
 
-    const updatedBill = await db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
+    const updatedBill = await db.prepare('SELECT * FROM bills WHERE id = $1').get(req.params.id);
 
     res.json({ message: '更新成功', bill: updatedBill });
   } catch (err) {
@@ -158,7 +158,7 @@ router.post('/:id/pay', async (req, res) => {
     const bill = await db.prepare(`
       SELECT b.* FROM bills b
       LEFT JOIN houses h ON b.house_id = h.id
-      WHERE b.id = ? AND h.user_id = ?
+      WHERE b.id = $1 AND h.user_id = $2
     `).get(req.params.id, req.userId);
 
     if (!bill) {
@@ -166,7 +166,7 @@ router.post('/:id/pay', async (req, res) => {
     }
 
     await db.prepare(`
-      UPDATE bills SET status = ?, paid_date = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?
+      UPDATE bills SET status = $1, paid_date = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3
     `).run('已缴纳', paid_date, req.params.id);
 
     res.json({ message: '缴费成功' });
@@ -183,14 +183,14 @@ router.delete('/:id', async (req, res) => {
     const bill = await db.prepare(`
       SELECT b.* FROM bills b
       LEFT JOIN houses h ON b.house_id = h.id
-      WHERE b.id = ? AND h.user_id = ?
+      WHERE b.id = $1 AND h.user_id = $2
     `).get(req.params.id, req.userId);
 
     if (!bill) {
       return res.status(404).json({ error: '账单不存在' });
     }
 
-    await db.prepare('DELETE FROM bills WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM bills WHERE id = $1').run(req.params.id);
 
     res.json({ message: '删除成功' });
   } catch (err) {

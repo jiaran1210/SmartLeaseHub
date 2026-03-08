@@ -17,17 +17,17 @@ router.get('/', async (req, res) => {
       SELECT m.*, h.name as house_name
       FROM meter_readings m
       LEFT JOIN houses h ON m.house_id = h.id
-      WHERE h.user_id = ?
+      WHERE h.user_id = $1
     `;
     const params = [req.userId];
 
     if (house_id) {
-      query += ' AND m.house_id = ?';
+      query += ' AND m.house_id = $' + (params.length + 1);
       params.push(house_id);
     }
 
     if (type) {
-      query += ' AND m.type = ?';
+      query += ' AND m.type = $' + (params.length + 1);
       params.push(type);
     }
 
@@ -48,7 +48,7 @@ router.get('/latest/:house_id/:type', async (req, res) => {
     const { house_id, type } = req.params;
 
     // 验证房屋属于当前用户
-    const house = await db.prepare('SELECT id FROM houses WHERE id = ? AND user_id = ?')
+    const house = await db.prepare('SELECT id FROM houses WHERE id = $1 AND user_id = $2')
       .get(house_id, req.userId);
 
     if (!house) {
@@ -57,7 +57,7 @@ router.get('/latest/:house_id/:type', async (req, res) => {
 
     const reading = await db.prepare(`
       SELECT * FROM meter_readings
-      WHERE house_id = ? AND type = ?
+      WHERE house_id = $1 AND type = $2
       ORDER BY reading_date DESC, created_at DESC
       LIMIT 1
     `).get(house_id, type);
@@ -79,7 +79,7 @@ router.post('/', async (req, res) => {
     }
 
     // 验证房屋属于当前用户
-    const house = await db.prepare('SELECT id FROM houses WHERE id = ? AND user_id = ?')
+    const house = await db.prepare('SELECT id FROM houses WHERE id = $1 AND user_id = $2')
       .get(house_id, req.userId);
 
     if (!house) {
@@ -90,7 +90,7 @@ router.post('/', async (req, res) => {
     let usage = 0;
     const lastReading = await db.prepare(`
       SELECT reading FROM meter_readings
-      WHERE house_id = ? AND type = ?
+      WHERE house_id = $1 AND type = $2
       ORDER BY reading_date DESC, created_at DESC
       LIMIT 1
     `).get(house_id, type);
@@ -103,10 +103,10 @@ router.post('/', async (req, res) => {
 
     await db.prepare(`
       INSERT INTO meter_readings (id, house_id, type, reading, reading_date, usage_amount, cost)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
     `).run(readingId, house_id, type, reading, reading_date, usage > 0 ? usage : 0, cost || null);
 
-    const newReading = await db.prepare('SELECT * FROM meter_readings WHERE id = ?').get(readingId);
+    const newReading = await db.prepare('SELECT * FROM meter_readings WHERE id = $1').get(readingId);
 
     res.json({ message: '添加成功', reading: newReading });
   } catch (err) {
@@ -122,14 +122,14 @@ router.delete('/:id', async (req, res) => {
     const reading = await db.prepare(`
       SELECT m.* FROM meter_readings m
       LEFT JOIN houses h ON m.house_id = h.id
-      WHERE m.id = ? AND h.user_id = ?
+      WHERE m.id = $1 AND h.user_id = $2
     `).get(req.params.id, req.userId);
 
     if (!reading) {
       return res.status(404).json({ error: '读数记录不存在' });
     }
 
-    await db.prepare('DELETE FROM meter_readings WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM meter_readings WHERE id = $1').run(req.params.id);
 
     res.json({ message: '删除成功' });
   } catch (err) {

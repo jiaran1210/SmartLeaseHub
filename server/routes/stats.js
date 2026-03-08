@@ -21,8 +21,8 @@ router.get('/yearly', async (req, res) => {
         COALESCE(SUM(rp.amount), 0) as total_income
       FROM houses h
       LEFT JOIN rent_payments rp ON h.id = rp.house_id
-        AND DATE_FORMAT(rp.payment_date, '%Y') = '` + targetYear + `'
-      WHERE h.user_id = ?
+        AND TO_CHAR(rp.payment_date, 'YYYY') = '` + targetYear + `'
+      WHERE h.user_id = $1
       GROUP BY h.id
       ORDER BY total_income DESC
     `).all(req.userId);
@@ -30,11 +30,11 @@ router.get('/yearly', async (req, res) => {
     // 月度收入趋势
     const monthlyTrend = await db.prepare(`
       SELECT
-        DATE_FORMAT(rp.payment_date, '%m') as month,
+        TO_CHAR(rp.payment_date, 'MM') as month,
         COALESCE(SUM(rp.amount), 0) as income
       FROM rent_payments rp
       LEFT JOIN houses h ON rp.house_id = h.id
-      WHERE h.user_id = ? AND DATE_FORMAT(rp.payment_date, '%Y') = '` + targetYear + `'
+      WHERE h.user_id = $1 AND TO_CHAR(rp.payment_date, 'YYYY') = '` + targetYear + `'
       GROUP BY month
       ORDER BY month
     `).all(req.userId);
@@ -48,8 +48,8 @@ router.get('/yearly', async (req, res) => {
       FROM houses h
       LEFT JOIN tenants t ON h.id = t.house_id AND t.status = 'active'
       LEFT JOIN rent_payments rp ON h.id = rp.house_id
-        AND DATE_FORMAT(rp.payment_date, '%Y') = '` + targetYear + `'
-      WHERE h.user_id = ?
+        AND TO_CHAR(rp.payment_date, 'YYYY') = '` + targetYear + `'
+      WHERE h.user_id = $1
     `).get(req.userId);
 
     res.json({
@@ -78,7 +78,7 @@ router.get('/houses/summary', async (req, res) => {
       FROM houses h
       LEFT JOIN tenants t ON h.id = t.house_id
       LEFT JOIN rent_payments rp ON h.id = rp.house_id
-      WHERE h.user_id = ?
+      WHERE h.user_id = $1
       GROUP BY h.id
     `).all(req.userId);
 
@@ -102,7 +102,7 @@ router.get('/reminders', async (req, res) => {
       FROM contracts c
       LEFT JOIN houses h ON c.house_id = h.id
       LEFT JOIN tenants t ON c.tenant_id = t.id
-      WHERE h.user_id = ? AND c.status = '生效' AND c.end_date <= ?
+      WHERE h.user_id = $1 AND c.status = '生效' AND c.end_date <= $2
       ORDER BY c.end_date ASC
     `).all(req.userId, futureDate.toISOString().split('T')[0]);
 
@@ -121,7 +121,7 @@ router.get('/reminders', async (req, res) => {
          ORDER BY payment_date DESC LIMIT 1) as last_payment_date
       FROM tenants t
       LEFT JOIN houses h ON t.house_id = h.id
-      WHERE h.user_id = ? AND t.status = 'active'
+      WHERE h.user_id = $1 AND t.status = 'active'
     `).all(req.userId);
 
     res.json({
@@ -141,27 +141,27 @@ router.get('/expenses', async (req, res) => {
 
     let query = `
       SELECT
-        DATE_FORMAT(b.bill_date, '%Y') as year,
-        DATE_FORMAT(b.bill_date, '%m') as month,
+        TO_CHAR(b.bill_date, 'YYYY') as year,
+        TO_CHAR(b.bill_date, 'MM') as month,
         b.type,
         COALESCE(SUM(b.amount), 0) as total_amount
       FROM bills b
       LEFT JOIN houses h ON b.house_id = h.id
-      WHERE h.user_id = ?
+      WHERE h.user_id = $1
     `;
     const params = [req.userId];
 
     if (house_id) {
-      query += ' AND b.house_id = ?';
+      query += ' AND b.house_id = $' + (params.length + 1);
       params.push(house_id);
     }
 
     if (year) {
-      query += " AND DATE_FORMAT(b.bill_date, '%Y') = '" + year + "'";
+      query += " AND TO_CHAR(b.bill_date, 'YYYY') = '" + year + "'";
     }
 
     if (type) {
-      query += ' AND b.type = ?';
+      query += ' AND b.type = $' + (params.length + 1);
       params.push(type);
     }
 

@@ -18,17 +18,17 @@ router.get('/', async (req, res) => {
       FROM contracts c
       LEFT JOIN houses h ON c.house_id = h.id
       LEFT JOIN tenants t ON c.tenant_id = t.id
-      WHERE h.user_id = ?
+      WHERE h.user_id = $1
     `;
     const params = [req.userId];
 
     if (house_id) {
-      query += ' AND c.house_id = ?';
+      query += ' AND c.house_id = $' + (params.length + 1);
       params.push(house_id);
     }
 
     if (tenant_id) {
-      query += ' AND c.tenant_id = ?';
+      query += ' AND c.tenant_id = $' + (params.length + 1);
       params.push(tenant_id);
     }
 
@@ -52,7 +52,7 @@ router.get('/:id', async (req, res) => {
       FROM contracts c
       LEFT JOIN houses h ON c.house_id = h.id
       LEFT JOIN tenants t ON c.tenant_id = t.id
-      WHERE c.id = ? AND h.user_id = ?
+      WHERE c.id = $1 AND h.user_id = $2
     `).get(req.params.id, req.userId);
 
     if (!contract) {
@@ -78,10 +78,10 @@ router.post('/', async (req, res) => {
     }
 
     // 验证房屋和租户属于当前用户
-    const house = await db.prepare('SELECT id FROM houses WHERE id = ? AND user_id = ?')
+    const house = await db.prepare('SELECT id FROM houses WHERE id = $1 AND user_id = $2')
       .get(house_id, req.userId);
 
-    const tenant = await db.prepare('SELECT id FROM tenants WHERE id = ?')
+    const tenant = await db.prepare('SELECT id FROM tenants WHERE id = $1')
       .get(tenant_id);
 
     if (!house || !tenant) {
@@ -95,10 +95,10 @@ router.post('/', async (req, res) => {
 
     await db.prepare(`
       INSERT INTO contracts (id, tenant_id, house_id, contract_no, start_date, end_date, monthly_rent, deposit, contract_file)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
     `).run(contractId, tenant_id, house_id, contract_no, start_date, end_date, monthly_rent, deposit || 0, contract_file || '');
 
-    const contract = await db.prepare('SELECT * FROM contracts WHERE id = ?').get(contractId);
+    const contract = await db.prepare('SELECT * FROM contracts WHERE id = $1').get(contractId);
 
     res.json({ message: '添加成功', contract });
   } catch (err) {
@@ -116,7 +116,7 @@ router.put('/:id', async (req, res) => {
     const contract = await db.prepare(`
       SELECT c.* FROM contracts c
       LEFT JOIN houses h ON c.house_id = h.id
-      WHERE c.id = ? AND h.user_id = ?
+      WHERE c.id = $1 AND h.user_id = $2
     `).get(req.params.id, req.userId);
 
     if (!contract) {
@@ -125,9 +125,9 @@ router.put('/:id', async (req, res) => {
 
     await db.prepare(`
       UPDATE contracts
-      SET start_date = ?, end_date = ?, monthly_rent = ?, deposit = ?, contract_file = ?, status = ?,
+      SET start_date = $1, end_date = $2, monthly_rent = $3, deposit = $4, contract_file = $5, status = $6,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
+      WHERE id = $7
     `).run(
       start_date || contract.start_date,
       end_date || contract.end_date,
@@ -138,7 +138,7 @@ router.put('/:id', async (req, res) => {
       req.params.id
     );
 
-    const updatedContract = await db.prepare('SELECT * FROM contracts WHERE id = ?').get(req.params.id);
+    const updatedContract = await db.prepare('SELECT * FROM contracts WHERE id = $1').get(req.params.id);
 
     res.json({ message: '更新成功', contract: updatedContract });
   } catch (err) {
@@ -154,14 +154,14 @@ router.delete('/:id', async (req, res) => {
     const contract = await db.prepare(`
       SELECT c.* FROM contracts c
       LEFT JOIN houses h ON c.house_id = h.id
-      WHERE c.id = ? AND h.user_id = ?
+      WHERE c.id = $1 AND h.user_id = $2
     `).get(req.params.id, req.userId);
 
     if (!contract) {
       return res.status(404).json({ error: '合同不存在' });
     }
 
-    await db.prepare('DELETE FROM contracts WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM contracts WHERE id = $1').run(req.params.id);
 
     res.json({ message: '删除成功' });
   } catch (err) {
@@ -183,7 +183,7 @@ router.get('/expiring/soon', async (req, res) => {
       FROM contracts c
       LEFT JOIN houses h ON c.house_id = h.id
       LEFT JOIN tenants t ON c.tenant_id = t.id
-      WHERE h.user_id = ? AND c.status = '生效' AND c.end_date <= ?
+      WHERE h.user_id = $1 AND c.status = '生效' AND c.end_date <= $2
       ORDER BY c.end_date ASC
     `).all(req.userId, futureDate.toISOString().split('T')[0]);
 

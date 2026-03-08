@@ -3,10 +3,14 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "postinstall": "node -e \"try { require('fs').unlinkSync(require('path').join(process.cwd(), 'node_modules/@rollup/rollup-linux-x64-gnu')); } catch(e) {}\""
   },
   "dependencies": {
     "vue": "^3.4.0",
@@ -19,7 +23,7 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^4.5.2",
-    "vite": "^5.0.8",
+    "vite": "^5.4.11",
     "sass": "^1.69.5"
   }
 }
